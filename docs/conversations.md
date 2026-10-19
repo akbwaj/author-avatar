@@ -9,7 +9,8 @@ Run shell commands from the repository root.
 retrieval, and citation validation remain the baseline. A bounded history
 rewrite resolves follow-ups into a search question while the original user
 message remains the question given to author generation and any separate review.
-The reviewer is still standalone; it is not invoked by conversational `/chat`.
+Answered drafts now receive evidence review in `/chat`, with at most one
+revision and a final review. Findings and rejected drafts remain internal.
 
 ### Installation and additive database migration
 
@@ -265,27 +266,33 @@ curl -i "http://127.0.0.1:8000/conversations/$CONVERSATION_ID/messages" \
    **original** message, whole newly retrieved passages and bounded history in
    data-only JSON. History is explicitly untrusted conversational context,
    never evidence. Old citations do not become valid current citations merely
-   by appearing in history. The separate reviewer can still receive the saved
-   author request, original question, and exact supplied passages.
+   by appearing in history. The reviewer receives the saved author request,
+   original question, draft, and those exact supplied passages.
 7. The author schema and existing citation/quotation validator run unchanged.
    IDs must come from actual supplied passages; markers and ID lists must agree;
    supported double-quoted quotations must match cited stored text. The server
    prefixes the AI identity disclosure and resolves source, edition, chapter,
    title and excerpt metadata from canonical retrieval records. No page numbers
    are invented. Empty retrieval/context or model abstention stays explicit.
-8. A second short write transaction rechecks ownership, reservation token,
+8. The separate reviewer returns `pass`, `revise` or `insufficient_evidence`.
+   Pass accepts the validated draft; insufficient evidence produces a static
+   abstention. Revise permits one author revision using the same evidence and
+   internal findings, followed by the same code checks and a final review.
+   Any non-pass final verdict produces a static abstention. Malformed outputs
+   and invalid citations fail closed, without automatic retries.
+9. A second short write transaction rechecks ownership, reservation token,
    deadline, original-message hash and supplied-history expiry. It atomically appends the original user
    message and final user-facing assistant response at stable increasing
    sequences, records the replayable response, and releases model capacity.
-   Failed calls, invalid drafts and rejected outputs append neither message.
-   Review findings and intermediate drafts are never conversation history.
+   Failed calls append neither message. Reviewer rejection can store a final
+   safe abstention, but never the rejected draft or review findings.
 
 History/reference resolution and semantic grounding still depend on model
 behavior. Schema validation cannot prove that a rewrite preserved intent, that
 an ambiguous reference was recognized, or that every claim follows from a cited
-passage. The prompt separation is not proof of injection resistance. The
-standalone reviewer is not part of `/chat`, and no reviewer accuracy evaluation
-is claimed. Book accounts must be attributed to the book, not presented as
+passage. The prompt separation is not proof of injection resistance. Reviewer
+approval is a model judgment, and no reviewer accuracy evaluation is claimed.
+Book accounts must be attributed to the book, not presented as
 externally verified facts.
 
 ### Idempotency, failures, deadlines and capacity
@@ -309,7 +316,7 @@ turn deadline plus five seconds). Stale work cannot append messages or release
 a newer worker's lease. No model call holds an open SQLite transaction.
 
 `CHAT_DEADLINE_SECONDS` defaults to 60 (allowed 0.01–120) and applies to the
-reserved turn's history loading, rewrite, retrieval, author work and final
+reserved turn's history loading, rewrite, retrieval, draft, reviews, revision and final
 commit. One outer async timeout shares the remaining budget across stages;
 finalization also checks the persisted deadline. `MODEL_TIMEOUT_SECONDS`
 remains a per-call limit (0.01–60). Expiry returns HTTP 504 `provider_timeout`,
@@ -317,14 +324,13 @@ not an abstention or a partial answer. Python cancellation is cooperative and
 SQLite statements/cleanup can take a short bounded wait; this is not a hard
 real-time deadline or proof the native model server immediately stopped work.
 
-The enforced current model-call budget is **at most two generations per turn**:
-one optional rewrite plus one author call. Clarification may stop after the
-rewrite; empty first-turn retrieval needs no generation. The wrapper counts
-calls and rejects a third call; there are no automatic retries. The standalone
-reviewer remains outside this workflow. If draft/review/one revision/final
-review are later integrated, their previous planned four-call ceiling must
-become **five including rewriting** and share the same overall deadline.
-No such revision workflow is claimed as implemented.
+The enforced model-call budget is **at most five calls per conversation turn**:
+one optional rewrite, author draft, evidence review, one author revision and
+final evidence review. Without rewriting the answer workflow permits at most
+four calls, including when invoked directly by the smoke script. Clarification,
+empty retrieval, author abstention, first-review approval or insufficient
+evidence can stop earlier. A second revision is never attempted. The wrappers
+reject excess calls; there are no automatic retries for malformed generation.
 
 A database-backed `model_work` lease limits active model-producing turns to
 `MODEL_MAX_CONCURRENT_TURNS` (default 1; allowed 1–4). It is shared by app
@@ -357,7 +363,11 @@ under both the 16,000-character data cap and a conservative UTF-8 byte budget
 including instructions, schema, original question and history. It reserves
 1536 output tokens and 2048 template tokens; the default full prompt cap is
 12,800 bytes. History can therefore reduce the number of whole passages that
-fit. Oversized passages are skipped intact; no identifiers are truncated.
+fit. Initial author packing also reserves up to 4,000 bytes (at most one third
+of the full budget) for review/revision overhead. Each later request must fit
+the full budget with the complete original evidence; an oversized draft or
+findings returns 503 instead of dropping evidence. Oversized initial passages
+are skipped intact; no identifiers are truncated.
 The full response envelope is bounded to 128,000 bytes and generation JSON to
 24,000 characters. Application validation remains authoritative.
 
@@ -382,7 +392,7 @@ Official implementation references:
 ### Tests and deployment limits
 
 ```sh
-python -m pytest tests/test_retention.py tests/test_memory.py tests/test_chat.py tests/test_ollama.py
+python -m pytest tests/test_workflow.py tests/test_reviewer.py tests/test_retention.py tests/test_memory.py tests/test_chat.py tests/test_ollama.py
 python -m pytest
 ```
 
@@ -409,5 +419,5 @@ There is no history encryption, administrator UI or distributed scheduler. Use o
 worker and one shared local database for the documented setup; multiple workers
 must use the same database and identical deadline/capacity configuration. Database
 leases handle crashes but cannot cancel work in another process or an external
-model client. The existing reviewer is still standalone. No frontend, embeddings,
-summary memory, evaluation dataset or automatic revision loop is added here.
+model client. Review permits only one bounded revision, not an unbounded agent
+loop. No frontend, embeddings, summary memory or evaluation dataset is added here.

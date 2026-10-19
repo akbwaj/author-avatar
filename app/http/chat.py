@@ -36,7 +36,7 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat", description=(
     "Authenticated conversation grounded in newly retrieved Autobiography of a Yogi passages. "
-    "Citation integrity is validated; semantic evidence review is not implemented."
+    "Citation integrity is validated and answered drafts receive evidence review, with at most one revision."
 ), responses={502: {"description": "Provider failed or returned invalid output"},
               503: {"description": "Retrieval or provider configuration unavailable"},
               504: {"description": "Provider timeout"}})

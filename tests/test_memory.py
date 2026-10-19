@@ -14,6 +14,7 @@ from app.generation.models import AI_IDENTITY
 from app.generation.persona import SYSTEM_INSTRUCTIONS
 from app.generation.provider import FakeProvider, ModelSettings, ProviderError
 from app.generation.rewrite import REWRITE_INSTRUCTIONS
+from app.generation.reviewer import REVIEW_INSTRUCTIONS
 from app.http.search import get_database_path
 from app.ingestion.parser import Block, Book, Section
 from app.ingestion.passages import split_passages
@@ -49,6 +50,8 @@ class MemoryFake(FakeProvider):
         self.requests.append(request)
         if self.bad:
             raise RuntimeError("secret-token rejected draft text")
+        if request.system == REVIEW_INSTRUCTIONS:
+            return json.dumps({"verdict": "pass", "issues": []})
         if request.system == REWRITE_INSTRUCTIONS:
             if self.ambiguous:
                 return json.dumps({"status": "clarification_needed", "search_question": None,
@@ -121,7 +124,7 @@ def test_user_lists_and_ownership_on_reads_writes_and_deletes(memory_client):
         assert client.get(f"/conversations/{other}/messages", headers=auth(user)).status_code == 404
         assert send(client, other, user=user).status_code == 404
         assert client.delete(f"/conversations/{other}", headers=auth(user)).status_code == 404
-    assert len(fake.requests) == 1
+    assert len(fake.requests) == 2
     assert len(messages(client, a)) == 2
     assert client.delete(f"/conversations/{a}").status_code == 204
     assert client.get(f"/conversations/{a}/messages").status_code == 404
@@ -180,9 +183,9 @@ def test_followup_uses_only_its_conversation_and_original_question_is_preserved(
     a, b = create(client), create(client)
     assert send(client, a).status_code == 200
     assert send(client, a, "Tell me more about it.").status_code == 200
-    assert [request.system for request in fake.requests] == [SYSTEM_INSTRUCTIONS, REWRITE_INSTRUCTIONS, SYSTEM_INSTRUCTIONS]
-    rewrite = json.loads(fake.requests[1].evidence_json)
-    author = json.loads(fake.requests[2].evidence_json)
+    assert [request.system for request in fake.requests] == [SYSTEM_INSTRUCTIONS, REVIEW_INSTRUCTIONS, REWRITE_INSTRUCTIONS, SYSTEM_INSTRUCTIONS, REVIEW_INSTRUCTIONS]
+    rewrite = json.loads(fake.requests[2].evidence_json)
+    author = json.loads(fake.requests[3].evidence_json)
     assert rewrite["message"] == author["question"] == "Tell me more about it."
     assert rewrite["history"] == author["history"]
     assert rewrite["history"][0]["content"] == "amber telescope"
@@ -209,7 +212,7 @@ def test_ambiguous_followup_asks_clarification_without_author_call(memory_client
     assert response.json()["status"] == "clarification_needed"
     assert response.json()["sources"] == []
     assert "Mira or the telescope" in response.json()["answer"]
-    assert len(fake.requests) == 2
+    assert len(fake.requests) == 3
     assert len(messages(client, cid)) == 4
 
 
@@ -280,8 +283,8 @@ def test_history_budget_keeps_completed_pairs_and_full_storage_separate(memory_c
     send(client, cid)
     monkeypatch.setenv("MEMORY_CONTEXT_BYTES", "0")
     send(client, cid, "amber telescope")
-    assert json.loads(fake.requests[1].evidence_json)["history"] == []
-    assert "history" not in json.loads(fake.requests[2].evidence_json)
+    assert json.loads(fake.requests[2].evidence_json)["history"] == []
+    assert "history" not in json.loads(fake.requests[3].evidence_json)
     assert len(messages(client, cid)) == 4
     rows = messages(client, cid)
     budget = len(json.dumps([{"role": r["role"], "content": r["content"], "sequence": r["sequence"]}
@@ -298,7 +301,7 @@ def test_completed_duplicate_replays_exact_response_without_messages_or_calls(me
     first = send(client, cid, request_id=rid)
     again = send(client, cid, request_id=rid)
     assert first.json() == again.json()
-    assert len(fake.requests) == 1
+    assert len(fake.requests) == 2
     assert len(messages(client, cid)) == 2
     conflict = send(client, cid, "different message", rid)
     assert conflict.status_code == 409
@@ -517,17 +520,17 @@ def test_shared_deadline_includes_rewrite_and_author(memory_client, monkeypatch)
     assert send(client, cid, "amber").status_code == 200
 
 
-def test_generation_counter_stops_third_call(memory_db):
+def test_generation_counter_stops_sixth_call(memory_db):
     cid = storage.create_conversation(memory_db, "demo-user-a")["conversation_id"]
     r = storage.reserve(memory_db, "demo-user-a", cid, str(uuid4()), "amber", time.time()+60)
     underlying = FakeProvider()
     counted = TurnProvider(memory_db, "demo-user-a", cid, r.token, 1, ModelSettings(), underlying)
 
     async def scenario():
-        await counted.generate(None)
-        await counted.generate(None)
+        for _ in range(5):
+            await counted.generate(None)
         with pytest.raises(ProviderError, match="budget"):
             await counted.generate(None)
 
     asyncio.run(scenario())
-    assert counted.calls == 2
+    assert counted.calls == 5

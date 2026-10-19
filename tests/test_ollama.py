@@ -13,6 +13,8 @@ from app.generation.persona import build_request
 from app.generation.provider import (
     FakeProvider, ModelSettings, ProviderConfigurationError, ProviderTimeout, create_provider, output_schema,
 )
+from app.generation.reviewer import REVIEW_INSTRUCTIONS
+from app.generation.revision import REVISION_INSTRUCTIONS
 from app.http.search import get_database_path
 from app.ingestion.parser import Block, Book, Section
 from app.ingestion.passages import split_passages
@@ -78,6 +80,11 @@ def mock_local(local_db, local_environment, monkeypatch):
         assert request.url.path == "/api/chat"
         if "body" in state:
             return httpx.Response(200, content=state["body"])
+        if "chat_responses" in state:
+            return httpx.Response(200, json=envelope(state["chat_responses"].pop(0)))
+        payload = json.loads(request.content)
+        if payload["messages"][0]["content"].startswith(REVIEW_INSTRUCTIONS):
+            return httpx.Response(200, json=envelope(json.dumps({"verdict": "pass", "issues": []})))
         return httpx.Response(state.get("status", 200), json=state["response"])
 
     def factory(settings):
@@ -111,7 +118,7 @@ def test_local_answer_uses_schema_and_canonical_sources(mock_local, local_db):
     for field in ("source_id", "edition_id", "section_id", "chapter_title", "chapter_number"):
         assert body["sources"][0][field] == getattr(stored, field)
     assert body["sources"][0]["excerpt"] == stored.passage_text
-    assert [path for path, _ in state["calls"]] == ["/api/show", "/api/chat"]
+    assert [path for path, _ in state["calls"]] == ["/api/show", "/api/chat", "/api/show", "/api/chat"]
     payload = state["calls"][1][1]
     assert payload["stream"] is False
     assert payload["format"]["additionalProperties"] is False
@@ -138,6 +145,34 @@ def test_local_abstention_is_preserved(mock_local):
     assert body["status"] == "insufficient_evidence"
     assert body["sources"] == []
     assert body["reason"] == "The needed detail is absent."
+
+
+def test_local_transport_runs_full_revision_workflow_with_role_schemas(mock_local):
+    client, state, pid = mock_local
+    issue = {"claim": "The book describes a silver telescope.", "category": "unsupported_claim",
+             "passage_ids": [pid], "explanation": "Use amber telescope from the supplied passage."}
+    state["chat_responses"] = [
+        json.dumps({"status": "answered", "answer": f"The book describes a silver telescope. [[{pid}]]", "citations": [pid]}),
+        json.dumps({"verdict": "revise", "issues": [issue]}),
+        answered(pid),
+        json.dumps({"verdict": "pass", "issues": []}),
+    ]
+    result = post(client)
+    assert result.status_code == 200
+    assert "amber telescope" in result.json()["answer"]
+    assert "silver telescope" not in result.text
+    assert [path for path, _ in state["calls"]] == ["/api/show", "/api/chat"] * 4
+    payloads = [body for path, body in state["calls"] if path == "/api/chat"]
+    assert payloads[2]["messages"][0]["content"].startswith(REVISION_INSTRUCTIONS)
+    for index, payload in enumerate(payloads):
+        data = json.loads(payload["messages"][1]["content"])
+        assert data["passages"] == json.loads(payloads[0]["messages"][1]["content"])["passages"]
+        if index in {1, 3}:
+            assert payload["messages"][0]["content"].startswith(REVIEW_INSTRUCTIONS)
+            assert payload["format"]["properties"]["verdict"]["enum"] == ["pass", "revise", "insufficient_evidence"]
+        else:
+            assert payload["format"]["properties"]["citations"]["items"]["enum"] == [pid]
+    assert state["chat_responses"] == []
 
 
 @pytest.mark.parametrize("architecture", ["qwen2", "qwen3"])

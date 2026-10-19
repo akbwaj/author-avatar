@@ -10,11 +10,11 @@ from app.generation.rewrite import rewrite_question
 from app.memory.context import MemorySettings, bounded_history, completed_pairs, needs_missing_context, has_reference
 from app.memory import storage, retention
 from app.retrieval.index import SearchIndexError
-from .chat import ChatResponse, answer_question
+from .chat import MAX_ANSWER_CALLS, ChatResponse, answer_question
 
 
 class TurnProvider:
-    """Count every generation across rewriting and authoring; no automatic retry."""
+    """Count rewriting, authoring, review and one revision; no automatic retry."""
     def __init__(self, db, owner, conversation_id, token, limit, settings, provider=None, *, history_expires_at=None):
         self.db, self.owner, self.conversation_id, self.token = db, owner, conversation_id, token
         self.limit, self.settings, self.provider = limit, settings, provider
@@ -23,7 +23,7 @@ class TurnProvider:
 
     async def generate(self, request):
         retention.check_context(self.history_expires_at)
-        if self.calls >= 2:
+        if self.calls >= MAX_ANSWER_CALLS + 1:
             raise ProviderError("Conversation model-call budget exceeded.")
         if self.calls == 0:
             try:

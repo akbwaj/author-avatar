@@ -1,1 +1,1 @@
-"""Deterministic grounded and conversation coordination; review stays standalone."""
+"""Deterministic conversation, grounded generation, review and revision coordination."""

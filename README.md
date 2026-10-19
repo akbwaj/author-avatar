@@ -11,11 +11,11 @@ Python 3.10+ · FastAPI · SQLite FTS5 · Ollama
 - Offline book ingestion and keyword retrieval.
 - Grounded answers through Ollama, with an offline fake provider for tests.
 - Citation and quotation validation against supplied passages.
+- Evidence review with at most one revision before returning an answer.
 - Owner-isolated conversations with duplicate-request protection.
 - Messages retained for 5 days, with automatic cleanup.
 
-The evidence reviewer is available as a standalone module; it is not yet part
-of `/chat`. A browser chat interface is planned.
+A browser chat interface is planned.
 
 ## Quickstart
 
@@ -56,8 +56,7 @@ require no AWS credentials, running Ollama server or model download.
 
 ## Development roadmap
 
-Next: integrate evidence review with at most one revision, add the browser chat
-interface, and build an evaluation dataset. See the
+Next: add the browser chat interface and build an evaluation dataset. See the
 [architecture and roadmap](docs/architecture.md) for the planned layers.
 
 ## Documentation
@@ -66,7 +65,7 @@ interface, and build an evaluation dataset. See the
 - [Book ingestion](docs/ingestion.md) and [keyword retrieval](docs/retrieval.md)
 - [Local chat, authentication and conversation memory](docs/conversations.md)
 - [Message retention](docs/conversations.md#automatic-message-retention)
-- [Standalone evidence reviewer](docs/reviewer.md)
+- [Evidence review and revision workflow](docs/reviewer.md)
 - [GitHub upload and CI](docs/github.md)
 - [Book provenance and notices](data/README.md)
 

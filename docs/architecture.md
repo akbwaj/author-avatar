@@ -11,7 +11,7 @@ Keep these responsibilities separate as they are added:
 | Ingestion | Load the selected edition; store passages and source metadata in SQLite. Preserve edition, source, chapter, and passage identifiers. |
 | Retrieval | Return relevant passages and their identifiers for chapter-level citations. |
 | Generation | Author-persona and evidence-review agents, using a replaceable provider interface and an offline fake. |
-| Orchestration | Deterministic sequence: retrieve → draft → review → optionally revise once → final validation. Reject or qualify unsupported claims rather than looping. |
+| Orchestration | Deterministic sequence: retrieve → draft → validate → review → optionally revise once → validate → final review. Abstain if review cannot approve an answer. |
 | HTTP | Validate requests and expose application results through FastAPI; `app/main.py` is the current entry point. |
 | Browser | Simple HTML/CSS/JavaScript text chat, displaying AI identity and chapter citations. |
 
@@ -34,7 +34,7 @@ Python's standard-library `sqlite3`; no database dependency is needed yet.
    AI identity and citations, and run an explicit question set. Report only
    observed results, limitations, and failures.
 
-The current implementation includes generation, citation integrity, and a
-standalone reviewer. `/chat` makes at most one history rewrite and one author-generation attempt, with
-no review, revision or retry loop. Reviewer integration and an evaluation
-dataset remain deferred.
+The current implementation includes generation, citation integrity, evidence
+review and at most one revision. `/chat` permits at most five model calls:
+one optional history rewrite, author draft, review, revision and final review.
+All share the turn deadline. Browser chat and an evaluation dataset remain deferred.

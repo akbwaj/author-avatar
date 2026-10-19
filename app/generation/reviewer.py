@@ -1,4 +1,4 @@
-"""Standalone, one-call evidence reviewer. Not imported by the chat pipeline."""
+"""One-call evidence reviewer, used by chat and independently testable."""
 
 import asyncio
 import json
@@ -38,7 +38,10 @@ explanation. Categories: unsupported_claim, citation_support, quotation,
 contradiction, invented_memory, question_relevance, external_fact. Reference only
 supplied passage IDs; use [] when no passage is relevant. An invented ID in the
 draft belongs in claim/explanation, never in passage_ids. Do not invent page
-numbers or source metadata. Give concise findings only; do not provide hidden
+numbers or source metadata. Prefer at most three findings, grouping related
+problems. Keep each claim excerpt under 160 characters and each explanation
+under 200 characters: one short actionable sentence, never a paragraph.
+The schema's hard length limits still apply. Give concise findings only; do not provide hidden
 chain-of-thought, step-by-step reasoning, or a replacement answer.
 """
 

@@ -10,6 +10,7 @@ import pytest
 from app.generation.models import AI_IDENTITY
 from app.generation.persona import MAX_CONTEXT_CHARACTERS, build_request
 from app.generation.provider import FakeProvider
+from app.generation.reviewer import REVIEW_INSTRUCTIONS
 from app.http.search import get_database_path
 from app.ingestion.parser import Block, Book, Section
 from app.ingestion.passages import split_passages
@@ -29,6 +30,8 @@ class ObservedFake(FakeProvider):
 
     async def generate(self, request):
         self.requests.append(request)
+        if request.system == REVIEW_INSTRUCTIONS:
+            return json.dumps({"verdict": "pass", "issues": []})
         return await super().generate(request)
 
 
@@ -105,7 +108,7 @@ def test_valid_answer_resolves_only_canonical_citations(client, chat_db, fake):
         "edition_status": "Fictional", "html_anchor": "chapter1",
         "excerpt": stored.passage_text,
     }
-    assert len(fake.requests) == 1
+    assert len(fake.requests) == 2
     evidence = json.loads(fake.requests[0].evidence_json)
     assert evidence["passages"][0]["passage_id"] == stored.passage_id
     assert evidence["passages"][0]["text"] == stored.passage_text

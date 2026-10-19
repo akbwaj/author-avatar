@@ -145,7 +145,7 @@ def test_only_unexpired_completed_turns_reach_models(memory_client, memory_db, c
     complete(memory_db, cid, clock, retention.cutoff() - 1, text="EXPIRED_PRIVATE_CONTENT")
     complete(memory_db, cid, clock, clock.now - 1, text="RECENT_PRIVATE_CONTEXT")
     assert send(client, cid, "Tell me more about it.").status_code == 200
-    assert len(fake.requests) == 2
+    assert len(fake.requests) == 3
     for request in fake.requests:
         data = json.loads(request.evidence_json)
         assert "EXPIRED_PRIVATE_CONTENT" not in request.evidence_json

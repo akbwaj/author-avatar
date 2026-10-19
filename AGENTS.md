@@ -7,7 +7,7 @@
 - Deliver text chat first with FastAPI, simple HTML/CSS/JavaScript, and SQLite.
 - Exclude voice and animation from this version.
 - Clearly identify the persona as AI, never the real author.
-- Follow the four milestones in README.md. The initial scaffold contains only
+- Follow the development roadmap in README.md. The initial scaffold contains only
   documentation, configuration, GET /health, and its test. Offline ingestion is
   now authorized, as is offline SQLite FTS5 keyword retrieval with a CLI and
   POST /search. Do not implement embeddings or agents until explicitly requested;

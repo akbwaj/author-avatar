@@ -12,7 +12,7 @@ the application code; no application-code license has been selected yet.
 
 ## Scope and current status
 
-The four-day version will provide text chat through FastAPI and a simple
+The project will provide text chat through FastAPI and a simple
 HTML/CSS/JavaScript interface, SQLite passages and source metadata, retrieval
 with chapter-level citations, an author-persona agent, and a separate
 evidence-review agent. A deterministic coordinator permits at most one revision.
@@ -49,21 +49,21 @@ stored source records; do not invent page numbers. Quotations must match source
 text. Credentials stay on the server and outside version control. SQLite uses
 Python's standard-library `sqlite3`; no database dependency is needed yet.
 
-## Four milestones
+## Development roadmap
 
-1. **Day 1 — Foundation and ingestion.** Complete this scaffold and health test,
+1. **Foundation and ingestion.** Complete this scaffold and health test,
    then select and record an edition/source and ingest chapter-labelled passages
    into SQLite with stable identifiers. Verify metadata and ingestion integrity.
-2. **Day 2 — Retrieval and citations.** Add retrieval independently of generation;
+2. **Retrieval and citations.** Add retrieval independently of generation;
    verify relevant results and chapter citations against the stored text.
-3. **Day 3 — Generation and coordination.** Add a provider interface and offline
+3. **Generation and coordination.** Add a provider interface and offline
    fake, persona agent, evidence reviewer, and deterministic coordinator with at
    most one revision. Test unsupported claims and instruction-like book text.
-4. **Day 4 — Browser chat and evaluation.** Connect the simple interface, display
+4. **Browser chat and evaluation.** Connect the simple interface, display
    AI identity and citations, and run an explicit question set. Report only
    observed results, limitations, and failures.
 
-The current Day 3 increment implements generation, citation integrity, and a
+The current implementation includes generation, citation integrity, and a
 standalone reviewer. `/chat` makes at most one history rewrite and one author-generation attempt, with
 no review, revision or retry loop. Reviewer integration and an evaluation
 dataset remain deferred.

@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Passage/source IDs hash the original source bytes: never normalize this file.
+data/raw/*.html -text -whitespace linguist-vendored
+reports/*.md -whitespace linguist-generated=true
